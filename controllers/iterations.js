@@ -1,18 +1,16 @@
 import { Post } from "../models/post.js"
 import { Profile } from "../models/profile.js"
 import { Iteration } from "../models/iteration.js"
+import { compareText } from "./utils/utils.js"
 
-const newIteration = async (req, res) => {
+const findKeywords = async (req, res) => {
   try {
     const { search } = req.query
     const filter = { topic: req.query.search }
-    const posts = await Post.find(search ? filter : {}, 'iterations')
-      .populate({
-        path: 'iterations',
-        select: 'text rating',
-        options: { sort: { 'rating': 'desc' } }
-      })
-    res.status(201).json(posts)
+    const iterations = await Iteration.find(search ? filter : {})
+      .limit(20).sort({ rating: 'desc' })
+    const keywords = compareText(iterations)
+    res.status(201).json(keywords)
   } catch (err) {
     res.status(500).json(err)
   }
@@ -20,13 +18,19 @@ const newIteration = async (req, res) => {
 
 const createIteration = async (req, res) => {
   try {
-    req.body.post = req.params.id
-    const iteration = await Iteration.create(req.body)
-    await Post.updateOne(
-      { _id: req.params.id },
-      { $push: { iterations: iteration } }
-    )
-    res.status(201).json(iteration)
+    const post = await Post.findById(req.params.id)
+    if (!post.author.equals(req.user.profile)) {
+      res.status(401).json({ msg: 'Unauthorized' })
+    } else {
+      req.body.topic = post.topic
+      req.body.post = req.params.id
+      const iteration = await Iteration.create(req.body)
+      await Post.updateOne(
+        { _id: req.params.id },
+        { $push: { iterations: iteration } }
+      )
+      res.status(201).json(iteration)
+    }
   } catch (err) {
     res.status(500).json(err)
   }
@@ -103,7 +107,7 @@ const createComment = async (req, res) => {
 export {
   undoVote,
   castVote,
-  newIteration,
+  findKeywords,
   createComment,
   createIteration,
 }

@@ -1,7 +1,7 @@
 import { Post } from "../models/post.js"
 import { Profile } from "../models/profile.js"
 import { Iteration } from "../models/iteration.js"
-import { compareText } from "./utils/utils.js"
+import { compareText, calculateStars } from "./utils/utils.js"
 
 const findKeywords = async (req, res) => {
   try {
@@ -40,7 +40,6 @@ const castVote = async (req, res) => {
   try {
     const vote = req.body.vote
     const { iterationId, postId } = req.params
-
     const post = await Post.findById(postId)
     const iteration = await Iteration.findById(iterationId)
 
@@ -49,16 +48,14 @@ const castVote = async (req, res) => {
         msg: `You cannot vote for the same post twice!`
       })
     }
-
     if (post.author.equals(req.user.profile)) {
       return res.status(401).json({ msg: 'You cannot vote for your own post.' })
     }
 
     iteration.votes.push({ vote: vote, profileId: req.user.profile })
-
     const length = iteration.votes.length
     const total = iteration.votes.reduce((t, v) => t + parseInt(v.vote), 0)
-    iteration.rating = (total / length)
+    iteration.rating = calculateStars((total / length))
 
     await iteration.save()
     res.status(200).json(iteration)
@@ -76,10 +73,9 @@ const undoVote = async (req, res) => {
     if (!prev) { return res.status(404).json({ msg: 'Vote note found!' }) }
 
     iteration.votes.remove({ _id: prev._id })
-
     const length = iteration.votes.length
     const total = iteration.votes.reduce((t, v) => t + parseInt(v.vote), 0)
-    iteration.rating = isNaN(total / length) ? 0 : (total / length)
+    iteration.rating = isNaN(total / length) ? 0 : calculateStars((total / length))
 
     await iteration.save()
     res.status(200).json(iteration)
